@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Sync · Pexels</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #1a1d24;
+      --border: #2a2f3a;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--muted); margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+    label { font-size: 0.875rem; color: var(--muted); display: block; margin-bottom: 0.35rem; }
+    input[type="text"], input[type="password"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.55rem 0.75rem;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 360px;
+      font-size: 0.9rem;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    button, .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover, .btn:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    button.secondary:hover { background: var(--border); }
+    button.danger { background: var(--danger); }
+    button.success { background: var(--success); }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.08);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th, td {
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 500; }
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .video-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .video-card.selected { border-color: var(--success); }
+    .video-card img {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+    .video-card .meta {
+      padding: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .video-card .meta strong { color: var(--text); display: block; margin-bottom: 0.15rem; }
+    .status { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--danger); }
+    .hidden { display: none !important; }
+    .shot-results { margin-top: 0.75rem; }
+    .badge {
+      display: inline-block;
+      background: var(--border);
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      margin-left: 0.35rem;
+    }
+    a { color: var(--accent); }
+    footer { margin-top: 2rem; font-size: 0.8rem; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Stock Sync · Pexels</h1>
+    <p class="subtitle">Hoja de tiempos → búsqueda en <a href="https://www.pexels.com/videos/" target="_blank" rel="noopener">Pexels</a> → un ZIP</p>
+
+    <!-- API Key -->
+    <div class="card">
+      <label for="apiKey">Clave de API de Pexels</label>
+      <div class="row" style="margin-top:0.35rem">
+        <input type="password" id="apiKey" placeholder="Pega tu clave aquí" />
+        <button id="btnSaveKey">Guardar</button>
+        <button class="secondary" id="btnForgetKey">Olvidar</button>
+        <button class="secondary" id="btnTestKey">Probar clave</button>
+      </div>
+      <p class="status" id="keyStatus">La clave se queda solo en este dispositivo. Créala gratis en <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>.</p>
+    </div>
+
+    <!-- Upload -->
+    <div class="card">
+      <div class="dropzone" id="dropzone">
+        <strong>Suelta el CSV o elige un archivo</strong><br>
+        <span style="font-size:0.85rem">Columnas recomendadas: tiempo, descripción, búsqueda, alternativa</span>
+        <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden" />
+      </div>
+      <div class="row" style="margin-top:1rem">
+        <button id="btnSearchAll" disabled>Buscar todas</button>
+        <button class="secondary" id="btnSearchEmpty" disabled>Solo las vacías</button>
+        <button class="secondary" id="btnClearSelection" disabled>Quitar selección</button>
+        <button class="success" id="btnDownload" disabled>Bajar ZIP</button>
+      </div>
+      <p class="status" id="fileStatus"></p>
+    </div>
+
+    <!-- Shots table -->
+    <div class="card hidden" id="shotsCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:0.75rem">
+        <strong>Tomas <span class="badge" id="clipCount">0 clips</span></strong>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tiempo</th>
+              <th>Descripción</th>
+              <th>Búsqueda</th>
+              <th>Seleccionado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="shotsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer>
+      Réplica inspirada en Stock Sync · Pexels. Los vídeos pertenecen a sus autores en Pexels. Usa siempre atribución.
+    </footer>
+  </div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const apiKeyInput = $('#apiKey');
+    const keyStatus = $('#keyStatus');
+    const dropzone = $('#dropzone');
+    const fileInput = $('#fileInput');
+    const fileStatus = $('#fileStatus');
+    const shotsCard = $('#shotsCard');
+    const shotsBody = $('#shotsBody');
+    const clipCount = $('#clipCount');
+    const btnSearchAll = $('#btnSearchAll');
+    const btnSearchEmpty = $('#btnSearchEmpty');
+    const btnClearSelection = $('#btnClearSelection');
+    const btnDownload = $('#btnDownload');
+
+    let shots = []; // { id, time, description, query, alt, results: [], selected: null, searching: false }
+
+    // ---------- API Key ----------
+    function loadKey() {
+      const k = localStorage.getItem('pexels_api_key') || '';
+      apiKeyInput.value = k;
+      updateKeyStatus();
+    }
+    function saveKey() {
+      const k = apiKeyInput.value.trim();
+      if (k) {
+        localStorage.setItem('pexels_api_key', k);
+        keyStatus.textContent = 'Clave guardada en este dispositivo.';
+        keyStatus.className = 'status ok';
+      }
+    }
+    function forgetKey() {
+      localStorage.removeItem('pexels_api_key');
+      apiKeyInput.value = '';
+      keyStatus.textContent = 'Clave eliminada.';
+      keyStatus.className = 'status';
+    }
+    function updateKeyStatus() {
+      if (localStorage.getItem('pexels_api_key')) {
+        keyStatus.textContent = 'Clave guardada. Se usa automáticamente.';
+        keyStatus.className = 'status ok';
+      }
+    }
+    async function testKey() {
+      const key = apiKeyInput.value.trim() || localStorage.getItem('pexels_api_key');
+      if (!key) {
+        keyStatus.textContent = 'Introduce una clave primero.';
+        keyStatus.className = 'status err';
+        return;
+      }
+      keyStatus.textContent = 'Probando…';
+      keyStatus.className = 'status';
+      try {
+        const res = await fetch('https://api.pexels.com/v1/videos/search?query=nature&per_page=1', {
+          headers: { Authorization: key }
+        });
+        if (res.ok) {
+          keyStatus.textContent = 'Clave válida.';
+          keyStatus.className = 'status ok';
+          if (!localStorage.getItem('pexels_api_key')) saveKey();
+        } else {
+          keyStatus.textContent = 'Clave inválida o error ' + res.status;
+          keyStatus.className = 'status err';
+        }
+      } catch (e) {
+        keyStatus.textContent = 'Error de red: ' + e.message;
+        keyStatus.className = 'status err';
+      }
+    }
+
+    $('#btnSaveKey').onclick = saveKey;
+    $('#btnForgetKey').onclick = forgetKey;
+    $('#btnTestKey').onclick = testKey;
+    loadKey();
+
+    // ---------- File upload ----------
+    dropzone.onclick = () => fileInput.click();
+    dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('dragover'); };
+    dropzone.ondragleave = () => dropzone.classList.remove('dragover');
+    dropzone.ondrop = (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    };
+    fileInput.onchange = () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); };
+
+    function handleFile(file) {
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        fileStatus.textContent = 'Por ahora solo se admite CSV. Exporta tu hoja a CSV.';
+        fileStatus.className = 'status err';
+        return;
+      }
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (res) => {
+          const rows = res.data;
+          if (!rows.length) {
+            fileStatus.textContent = 'El archivo está vacío.';
+            fileStatus.className = 'status err';
+            return;
+          }
+          // Detect columns (flexible names)
+          const keys = Object.keys(rows[0]).map(k => k.toLowerCase().trim());
+          const findCol = (...names) => {
+            for (const n of names) {
+              const i = keys.findIndex(k => k.includes(n));
+              if (i >= 0) return Object.keys(rows[0])[i];
+            }
+            return null;
+          };
+          const colTime = findCol('tiempo', 'time', 'timecode', 'tc');
+          const colDesc = findCol('descripcion', 'description', 'lo que suena', 'audio', 'sound');
+          const colQuery = findCol('busqueda', 'search', 'query', 'keyword');
+          const colAlt = findCol('alternativa', 'alt', 'alternative');
+
+          shots = rows.map((r, i) => ({
+            id: i + 1,
+            time: colTime ? (r[colTime] || '') : '',
+            description: colDesc ? (r[colDesc] || '') : '',
+            query: colQuery ? (r[colQuery] || '') : (colDesc ? (r[colDesc] || '') : ''),
+            alt: colAlt ? (r[colAlt] || '') : '',
+            results: [],
+            selected: null,
+            searching: false
+          })).filter(s => s.query || s.description || s.time);
+
+          fileStatus.textContent = `Cargadas ${shots.length} tomas.`;
+          fileStatus.className = 'status ok';
+          renderShots();
+          btnSearchAll.disabled = false;
+          btnSearchEmpty.disabled = false;
+          btnClearSelection.disabled = false;
+          updateDownloadBtn();
+        },
+        error: (err) => {
+          fileStatus.textContent = 'Error al leer CSV: ' + err.message;
+          fileStatus.className = 'status err';
+        }
+      });
+    }
+
+    // ---------- Render ----------
+    function renderShots() {
+      shotsCard.classList.remove('hidden');
+      shotsBody.innerHTML = '';
+      let selectedCount = 0;
+      shots.forEach((s, idx) => {
+        if (s.selected) selectedCount++;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.id}</td>
+          <td>${escapeHtml(s.time)}</td>
+          <td>${escapeHtml(s.description)}</td>
+          <td>
+            <input type="text" value="${escapeHtml(s.query)}" data-idx="${idx}" class="query-input" style="max-width:180px;padding:0.3rem 0.5rem;font-size:0.8rem" />
+          </td>
+          <td class="selected-cell">${s.selected ? `<span style="color:var(--success)">✓ ${s.selected.user?.name || 'clip'}</span>` : '—'}</td>
+          <td>
+            <button class="secondary search-one" data-idx="${idx}" style="padding:0.3rem 0.6rem;font-size:0.8rem">Buscar</button>
+          </td>
+        `;
+        shotsBody.appendChild(tr);
+
+        // results row
+        const resTr = document.createElement('tr');
+        resTr.className = 'shot-results-row';
+        resTr.innerHTML = `<td colspan="6"><div class="shot-results" id="results-${idx}"></div></td>`;
+        shotsBody.appendChild(resTr);
+        renderResults(idx);
+      });
+      clipCount.textContent = selectedCount + ' clips';
+
+      // events
+      document.querySelectorAll('.query-input').forEach(inp => {
+        inp.onchange = () => { shots[+inp.dataset.idx].query = inp.value.trim(); };
+      });
+      document.querySelectorAll('.search-one').forEach(btn => {
+        btn.onclick = () => searchOne(+btn.dataset.idx);
+      });
+    }
+
+    function renderResults(idx) {
+      const container = $(`#results-${idx}`);
+      if (!container) return;
+      const s = shots[idx];
+      if (s.searching) {
+        container.innerHTML = '<span class="status">Buscando…</span>';
+        return;
+      }
+      if (!s.results.length) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = '<div class="results-grid"></div>';
+      const grid = container.querySelector('.results-grid');
+      s.results.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'video-card' + (s.selected && s.selected.id === v.id ? ' selected' : '');
+        const thumb = v.image || (v.video_pictures && v.video_pictures[0]?.picture) || '';
+        card.innerHTML = `
+          <img src="${thumb}" alt="" loading="lazy" />
+          <div class="meta">
+            <strong>${v.user?.name || 'Autor'}</strong>
+            ${v.duration || '?'}s · id ${v.id}
+          </div>
+        `;
+        card.onclick = () => {
+          s.selected = v;
+          renderShots();
+          updateDownloadBtn();
+        };
+        grid.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ---------- Search ----------
+    function getKey() {
+      return apiKeyInput.value.trim() || localStorage.getItem('pexels_api_key') || '';
+    }
+
+    async function searchPexels(query) {
+      const key = getKey();
+      if (!key) throw new Error('Falta la clave de API');
+      const url = `https://api.pexels.com/v1/videos/search?query=${encodeURIComponent(query)}&per_page=12&orientation=landscape`;
+      const res = await fetch(url, { headers: { Authorization: key } });
+      if (!res.ok) throw new Error('Error ' + res.status);
+      const data = await res.json();
+      return data.videos || [];
+    }
+
+    async function searchOne(idx) {
+      const s = shots[idx];
+      const q = s.query || s.description || s.alt;
+      if (!q) {
+        alert('Escribe un término de búsqueda');
+        return;
+      }
+      s.searching = true;
+      renderResults(idx);
+      try {
+        s.results = await searchPexels(q);
+        if (!s.results.length && s.alt) {
+          s.results = await searchPexels(s.alt);
+        }
+      } catch (e) {
+        alert('Error al buscar: ' + e.message);
+        s.results = [];
+      }
+      s.searching = false;
+      renderResults(idx);
+    }
+
+    async function searchAll(onlyEmpty) {
+      const key = getKey();
+      if (!key) {
+        alert('Guarda o introduce una clave de API de Pexels primero.');
+        return;
+      }
+      btnSearchAll.disabled = true;
+      btnSearchEmpty.disabled = true;
+      for (let i = 0; i < shots.length; i++) {
+        if (onlyEmpty && shots[i].selected) continue;
+        await searchOne(i);
+        // small delay to be nice to the API
+        await new Promise(r => setTimeout(r, 350));
+      }
+      btnSearchAll.disabled = false;
+      btnSearchEmpty.disabled = false;
+    }
+
+    btnSearchAll.onclick = () => searchAll(false);
+    btnSearchEmpty.onclick = () => searchAll(true);
+    btnClearSelection.onclick = () => {
+      shots.forEach(s => s.selected = null);
+      renderShots();
+      updateDownloadBtn();
+    };
+
+    function updateDownloadBtn() {
+      const n = shots.filter(s => s.selected).length;
+      btnDownload.disabled = n === 0;
+      clipCount.textContent = n + ' clips';
+    }
+
+    // ---------- ZIP download ----------
+    btnDownload.onclick = async () => {
+      const selected = shots.filter(s => s.selected);
+      if (!selected.length) return;
+
+      btnDownload.disabled = true;
+      btnDownload.textContent = 'Generando…';
+
+      const zip = new JSZip();
+      let attribution = 'Stock Sync · Pexels – Atribuciones\n';
+      attribution += '=====================================\n\n';
+      attribution += 'Todos los vídeos son de Pexels y deben atribuirse según sus términos.\n\n';
+
+      selected.forEach((s, i) => {
+        const v = s.selected;
+        const num = String(i + 1).padStart(2, '0');
+        const safeName = (s.time || s.query || 'clip').replace(/[^a-z0-9áéíóúñ\- ]/gi, '').slice(0, 40);
+        const fileBase = `${num}_${safeName}`;
+
+        // Best quality file link (prefer hd)
+        let videoUrl = '';
+        if (v.video_files && v.video_files.length) {
+          const sorted = [...v.video_files].sort((a, b) => (b.width || 0) - (a.width || 0));
+          videoUrl = sorted[0].link;
+        }
+
+        attribution += `Toma ${s.id} – ${s.time || ''}\n`;
+        attribution += `  Descripción: ${s.description || '—'}\n`;
+        attribution += `  Autor: ${v.user?.name || '—'}\n`;
+        attribution += `  Perfil: ${v.user?.url || '—'}\n`;
+        attribution += `  Página Pexels: ${v.url || '—'}\n`;
+        attribution += `  Enlace directo: ${videoUrl || '—'}\n`;
+        attribution += `  ID: ${v.id}\n\n`;
+
+        // Also a simple text file per clip with the link
+        zip.file(`${fileBase}_link.txt`, `Autor: ${v.user?.name || ''}\nPexels: ${v.url || ''}\nVideo: ${videoUrl || ''}\n`);
+      });
+
+      zip.file('ATRIBUCIONES.txt', attribution);
+      zip.file('README.txt', `Stock Sync · Pexels\n\nEste ZIP contiene los enlaces y atribuciones de los clips seleccionados.\nDescarga los vídeos desde los enlaces (o usa un gestor de descargas).\n\nRecuerda atribuir a los autores según las normas de Pexels.\n`);
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      saveAs(blob, 'stock-sync-pexels.zip');
+
+      btnDownload.textContent = 'Bajar ZIP';
+      btnDownload.disabled = false;
+    };
+  </script>
+</body>
+</html>
