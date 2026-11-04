@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Sync · Multi (Pexels + Pixabay + Coverr)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #1a1d24;
+      --border: #2a2f3a;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --pexels: #05a081;
+      --pixabay: #00ab6b;
+      --coverr: #7c3aed;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--muted); margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+    label { font-size: 0.875rem; color: var(--muted); display: block; margin-bottom: 0.35rem; }
+    input[type="text"], input[type="password"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.55rem 0.75rem;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 320px;
+      font-size: 0.9rem;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    button, .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    button.secondary:hover { background: var(--border); }
+    button.success { background: var(--success); }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.08);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th, td {
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 500; }
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .video-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      position: relative;
+    }
+    .video-card.selected { border-color: var(--success); }
+    .video-card img {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+    .video-card .meta {
+      padding: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .video-card .meta strong { color: var(--text); display: block; margin-bottom: 0.15rem; }
+    .source-badge {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: white;
+      text-transform: uppercase;
+    }
+    .source-pexels { background: var(--pexels); }
+    .source-pixabay { background: var(--pixabay); }
+    .source-coverr { background: var(--coverr); }
+    .status { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--danger); }
+    .hidden { display: none !important; }
+    .badge {
+      display: inline-block;
+      background: var(--border);
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      margin-left: 0.35rem;
+    }
+    .keys-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .key-block { }
+    .sources-row {
+      display: flex;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+    .sources-row label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    footer { margin-top: 2rem; font-size: 0.8rem; color: var(--muted); text-align: center; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Stock Sync · Multi</h1>
+    <p class="subtitle">Pexels + Pixabay + Coverr → hoja de tiempos → ZIP con atribuciones</p>
+
+    <!-- API Keys -->
+    <div class="card">
+      <strong style="display:block;margin-bottom:0.75rem">Claves de API</strong>
+      <div class="keys-grid">
+        <div class="key-block">
+          <label>Pexels</label>
+          <input type="password" id="keyPexels" placeholder="Clave Pexels" />
+          <div class="row" style="margin-top:0.4rem">
+            <button class="secondary" id="btnSavePexels" style="padding:0.35rem 0.7rem;font-size:0.8rem">Guardar</button>
+            <button class="secondary" id="btnTestPexels" style="padding:0.35rem 0.7rem;font-size:0.8rem">Probar</button>
+          </div>
+          <p class="status" id="statusPexels"></p>
+        </div>
+        <div class="key-block">
+          <label>Pixabay</label>
+          <input type="password" id="keyPixabay" placeholder="Clave Pixabay" />
+          <div class="row" style="margin-top:0.4rem">
+            <button class="secondary" id="btnSavePixabay" style="padding:0.35rem 0.7rem;font-size:0.8rem">Guardar</button>
+            <button class="secondary" id="btnTestPixabay" style="padding:0.35rem 0.7rem;font-size:0.8rem">Probar</button>
+          </div>
+          <p class="status" id="statusPixabay"></p>
+        </div>
+        <div class="key-block">
+          <label>Coverr</label>
+          <input type="password" id="keyCoverr" placeholder="Clave Coverr" />
+          <div class="row" style="margin-top:0.4rem">
+            <button class="secondary" id="btnSaveCoverr" style="padding:0.35rem 0.7rem;font-size:0.8rem">Guardar</button>
+            <button class="secondary" id="btnTestCoverr" style="padding:0.35rem 0.7rem;font-size:0.8rem">Probar</button>
+          </div>
+          <p class="status" id="statusCoverr"></p>
+        </div>
+      </div>
+      <p class="status" style="margin-top:0.75rem">
+        Las claves se guardan solo en este dispositivo.
+        <a href="https://www.pexels.com/api/" target="_blank">Pexels</a> ·
+        <a href="https://pixabay.com/api/docs/" target="_blank">Pixabay</a> ·
+        <a href="https://coverr.co/api" target="_blank">Coverr</a>
+      </p>
+    </div>
+
+    <!-- Sources + Upload -->
+    <div class="card">
+      <strong style="display:block;margin-bottom:0.5rem">Fuentes a buscar</strong>
+      <div class="sources-row">
+        <label><input type="checkbox" id="usePexels" checked /> Pexels</label>
+        <label><input type="checkbox" id="usePixabay" checked /> Pixabay</label>
+        <label><input type="checkbox" id="useCoverr" checked /> Coverr</label>
+      </div>
+
+      <div class="dropzone" id="dropzone" style="margin-top:1.25rem">
+        <strong>Suelta el CSV o elige un archivo</strong><br>
+        <span style="font-size:0.85rem">Columnas: tiempo, descripción, búsqueda, alternativa</span>
+        <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden" />
+      </div>
+      <div class="row" style="margin-top:1rem">
+        <button id="btnSearchAll" disabled>Buscar todas</button>
+        <button class="secondary" id="btnSearchEmpty" disabled>Solo las vacías</button>
+        <button class="secondary" id="btnClearSelection" disabled>Quitar selección</button>
+        <button class="success" id="btnDownload" disabled>Bajar ZIP</button>
+      </div>
+      <p class="status" id="fileStatus"></p>
+    </div>
+
+    <!-- Shots -->
+    <div class="card hidden" id="shotsCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:0.75rem">
+        <strong>Tomas <span class="badge" id="clipCount">0 clips</span></strong>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tiempo</th>
+              <th>Descripción</th>
+              <th>Búsqueda</th>
+              <th>Seleccionado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="shotsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer>
+      Stock Sync Multi · Pexels + Pixabay + Coverr. Respeta las licencias y atribuciones de cada plataforma.
+    </footer>
+  </div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    let shots = [];
+
+    // ---------- Keys ----------
+    function loadKeys() {
+      ['pexels','pixabay','coverr'].forEach(s => {
+        const k = localStorage.getItem('key_' + s) || '';
+        $(`#key${s.charAt(0).toUpperCase()+s.slice(1)}`).value = k;
+      });
+    }
+    function saveKey(source) {
+      const id = `#key${source.charAt(0).toUpperCase()+source.slice(1)}`;
+      const val = $(id).value.trim();
+      if (val) {
+        localStorage.setItem('key_' + source, val);
+        $(`#status${source.charAt(0).toUpperCase()+source.slice(1)}`).textContent = 'Guardada';
+        $(`#status${source.charAt(0).toUpperCase()+source.slice(1)}`).className = 'status ok';
+      }
+    }
+    function getKey(source) {
+      return $(`#key${source.charAt(0).toUpperCase()+source.slice(1)}`).value.trim() || localStorage.getItem('key_' + source) || '';
+    }
+
+    async function testPexels() {
+      const key = getKey('pexels');
+      const st = $('#statusPexels');
+      if (!key) { st.textContent = 'Falta clave'; st.className = 'status err'; return; }
+      st.textContent = 'Probando…';
+      try {
+        const r = await fetch('https://api.pexels.com/v1/videos/search?query=nature&per_page=1', { headers: { Authorization: key } });
+        st.textContent = r.ok ? 'Clave válida' : 'Error ' + r.status;
+        st.className = r.ok ? 'status ok' : 'status err';
+        if (r.ok) saveKey('pexels');
+      } catch(e) { st.textContent = 'Error de red'; st.className = 'status err'; }
+    }
+    async function testPixabay() {
+      const key = getKey('pixabay');
+      const st = $('#statusPixabay');
+      if (!key) { st.textContent = 'Falta clave'; st.className = 'status err'; return; }
+      st.textContent = 'Probando…';
+      try {
+        const r = await fetch(`https://pixabay.com/api/videos/?key=${key}&q=nature&per_page=3`);
+        const d = await r.json();
+        st.textContent = (d.hits) ? 'Clave válida' : 'Error';
+        st.className = d.hits ? 'status ok' : 'status err';
+        if (d.hits) saveKey('pixabay');
+      } catch(e) { st.textContent = 'Error de red'; st.className = 'status err'; }
+    }
+    async function testCoverr() {
+      const key = getKey('coverr');
+      const st = $('#statusCoverr');
+      if (!key) { st.textContent = 'Falta clave'; st.className = 'status err'; return; }
+      st.textContent = 'Probando…';
+      try {
+        const r = await fetch(`https://api.coverr.co/videos?query=nature&page_size=1&api_key=${key}`);
+        st.textContent = r.ok ? 'Clave válida' : 'Error ' + r.status;
+        st.className = r.ok ? 'status ok' : 'status err';
+        if (r.ok) saveKey('coverr');
+      } catch(e) { st.textContent = 'Error de red'; st.className = 'status err'; }
+    }
+
+    $('#btnSavePexels').onclick = () => saveKey('pexels');
+    $('#btnSavePixabay').onclick = () => saveKey('pixabay');
+    $('#btnSaveCoverr').onclick = () => saveKey('coverr');
+    $('#btnTestPexels').onclick = testPexels;
+    $('#btnTestPixabay').onclick = testPixabay;
+    $('#btnTestCoverr').onclick = testCoverr;
+    loadKeys();
+
+    // ---------- File ----------
+    const dropzone = $('#dropzone');
+    const fileInput = $('#fileInput');
+    dropzone.onclick = () => fileInput.click();
+    dropzone.ondragover = e => { e.preventDefault(); dropzone.classList.add('dragover'); };
+    dropzone.ondragleave = () => dropzone.classList.remove('dragover');
+    dropzone.ondrop = e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    };
+    fileInput.onchange = () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); };
+
+    function handleFile(file) {
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        $('#fileStatus').textContent = 'Solo se admite CSV por ahora.';
+        $('#fileStatus').className = 'status err';
+        return;
+      }
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (res) => {
+          const rows = res.data;
+          if (!rows.length) {
+            $('#fileStatus').textContent = 'Archivo vacío';
+            $('#fileStatus').className = 'status err';
+            return;
+          }
+          const keys = Object.keys(rows[0]).map(k => k.toLowerCase().trim());
+          const findCol = (...names) => {
+            for (const n of names) {
+              const i = keys.findIndex(k => k.includes(n));
+              if (i >= 0) return Object.keys(rows[0])[i];
+            }
+            return null;
+          };
+          const colTime = findCol('tiempo','time','timecode','tc');
+          const colDesc = findCol('descripcion','description','lo que suena','audio','sound');
+          const colQuery = findCol('busqueda','search','query','keyword');
+          const colAlt = findCol('alternativa','alt','alternative');
+
+          shots = rows.map((r, i) => ({
+            id: i + 1,
+            time: colTime ? (r[colTime] || '') : '',
+            description: colDesc ? (r[colDesc] || '') : '',
+            query: colQuery ? (r[colQuery] || '') : (colDesc ? (r[colDesc] || '') : ''),
+            alt: colAlt ? (r[colAlt] || '') : '',
+            results: [],
+            selected: null,
+            searching: false
+          })).filter(s => s.query || s.description || s.time);
+
+          $('#fileStatus').textContent = `Cargadas ${shots.length} tomas.`;
+          $('#fileStatus').className = 'status ok';
+          renderShots();
+          $('#btnSearchAll').disabled = false;
+          $('#btnSearchEmpty').disabled = false;
+          $('#btnClearSelection').disabled = false;
+          updateDownloadBtn();
+        }
+      });
+    }
+
+    // ---------- Normalize results ----------
+    function normalizePexels(videos) {
+      return (videos || []).map(v => {
+        let videoUrl = '';
+        if (v.video_files?.length) {
+          const sorted = [...v.video_files].sort((a,b) => (b.width||0)-(a.width||0));
+          videoUrl = sorted[0].link;
+        }
+        return {
+          source: 'pexels',
+          id: v.id,
+          title: v.user?.name || 'Pexels',
+          user: v.user?.name || '',
+          userUrl: v.user?.url || '',
+          pageUrl: v.url || '',
+          thumb: v.image || '',
+          duration: v.duration || 0,
+          videoUrl
+        };
+      });
+    }
+    function normalizePixabay(hits) {
+      return (hits || []).map(v => {
+        const vids = v.videos || {};
+        const best = vids.large || vids.medium || vids.small || vids.tiny || {};
+        return {
+          source: 'pixabay',
+          id: v.id,
+          title: v.user || 'Pixabay',
+          user: v.user || '',
+          userUrl: v.user ? `https://pixabay.com/users/${v.user}-${v.user_id}/` : '',
+          pageUrl: v.pageURL || '',
+          thumb: best.thumbnail || '',
+          duration: v.duration || 0,
+          videoUrl: best.url || ''
+        };
+      });
+    }
+    function normalizeCoverr(hits) {
+      return (hits || []).map(v => {
+        const urls = v.urls || {};
+        return {
+          source: 'coverr',
+          id: v.id,
+          title: v.title || 'Coverr',
+          user: 'Coverr',
+          userUrl: 'https://coverr.co',
+          pageUrl: v.id ? `https://coverr.co/videos/${v.id}` : '',
+          thumb: v.thumbnail || v.poster || '',
+          duration: Math.round(v.duration || 0),
+          videoUrl: urls.mp4_download || urls.mp4 || urls.mp4_preview || ''
+        };
+      });
+    }
+
+    // ---------- Search ----------
+    async function searchPexels(q) {
+      const key = getKey('pexels');
+      if (!key) return [];
+      const r = await fetch(`https://api.pexels.com/v1/videos/search?query=${encodeURIComponent(q)}&per_page=8&orientation=landscape`, {
+        headers: { Authorization: key }
+      });
+      if (!r.ok) return [];
+      const d = await r.json();
+      return normalizePexels(d.videos);
+    }
+    async function searchPixabay(q) {
+      const key = getKey('pixabay');
+      if (!key) return [];
+      const r = await fetch(`https://pixabay.com/api/videos/?key=${key}&q=${encodeURIComponent(q)}&per_page=8`);
+      if (!r.ok) return [];
+      const d = await r.json();
+      return normalizePixabay(d.hits);
+    }
+    async function searchCoverr(q) {
+      const key = getKey('coverr');
+      if (!key) return [];
+      const r = await fetch(`https://api.coverr.co/videos?query=${encodeURIComponent(q)}&page_size=8&urls=true&api_key=${key}`);
+      if (!r.ok) return [];
+      const d = await r.json();
+      return normalizeCoverr(d.hits);
+    }
+
+    async function searchOne(idx) {
+      const s = shots[idx];
+      const q = s.query || s.description || s.alt;
+      if (!q) { alert('Escribe un término de búsqueda'); return; }
+
+      s.searching = true;
+      renderResults(idx);
+
+      const tasks = [];
+      if ($('#usePexels').checked) tasks.push(searchPexels(q));
+      if ($('#usePixabay').checked) tasks.push(searchPixabay(q));
+      if ($('#useCoverr').checked) tasks.push(searchCoverr(q));
+
+      try {
+        const results = await Promise.all(tasks);
+        s.results = results.flat();
+        // If empty and has alt, try alt
+        if (!s.results.length && s.alt && s.alt !== q) {
+          const altTasks = [];
+          if ($('#usePexels').checked) altTasks.push(searchPexels(s.alt));
+          if ($('#usePixabay').checked) altTasks.push(searchPixabay(s.alt));
+          if ($('#useCoverr').checked) altTasks.push(searchCoverr(s.alt));
+          const altResults = await Promise.all(altTasks);
+          s.results = altResults.flat();
+        }
+      } catch(e) {
+        console.error(e);
+        s.results = [];
+      }
+      s.searching = false;
+      renderResults(idx);
+    }
+
+    async function searchAll(onlyEmpty) {
+      $('#btnSearchAll').disabled = true;
+      $('#btnSearchEmpty').disabled = true;
+      for (let i = 0; i < shots.length; i++) {
+        if (onlyEmpty && shots[i].selected) continue;
+        await searchOne(i);
+        await new Promise(r => setTimeout(r, 400));
+      }
+      $('#btnSearchAll').disabled = false;
+      $('#btnSearchEmpty').disabled = false;
+    }
+
+    $('#btnSearchAll').onclick = () => searchAll(false);
+    $('#btnSearchEmpty').onclick = () => searchAll(true);
+    $('#btnClearSelection').onclick = () => {
+      shots.forEach(s => s.selected = null);
+      renderShots();
+      updateDownloadBtn();
+    };
+
+    // ---------- Render ----------
+    function renderShots() {
+      $('#shotsCard').classList.remove('hidden');
+      const body = $('#shotsBody');
+      body.innerHTML = '';
+      let selectedCount = 0;
+      shots.forEach((s, idx) => {
+        if (s.selected) selectedCount++;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.id}</td>
+          <td>${escapeHtml(s.time)}</td>
+          <td>${escapeHtml(s.description)}</td>
+          <td><input type="text" value="${escapeHtml(s.query)}" data-idx="${idx}" class="query-input" style="max-width:180px;padding:0.3rem 0.5rem;font-size:0.8rem" /></td>
+          <td>${s.selected ? `<span style="color:var(--success)">✓ ${escapeHtml(s.selected.title)} <small>(${s.selected.source})</small></span>` : '—'}</td>
+          <td><button class="secondary search-one" data-idx="${idx}" style="padding:0.3rem 0.6rem;font-size:0.8rem">Buscar</button></td>
+        `;
+        body.appendChild(tr);
+        const resTr = document.createElement('tr');
+        resTr.innerHTML = `<td colspan="6"><div class="shot-results" id="results-${idx}"></div></td>`;
+        body.appendChild(resTr);
+        renderResults(idx);
+      });
+      $('#clipCount').textContent = selectedCount + ' clips';
+
+      document.querySelectorAll('.query-input').forEach(inp => {
+        inp.onchange = () => { shots[+inp.dataset.idx].query = inp.value.trim(); };
+      });
+      document.querySelectorAll('.search-one').forEach(btn => {
+        btn.onclick = () => searchOne(+btn.dataset.idx);
+      });
+    }
+
+    function renderResults(idx) {
+      const container = $(`#results-${idx}`);
+      if (!container) return;
+      const s = shots[idx];
+      if (s.searching) {
+        container.innerHTML = '<span class="status">Buscando en las fuentes seleccionadas…</span>';
+        return;
+      }
+      if (!s.results.length) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = '<div class="results-grid"></div>';
+      const grid = container.querySelector('.results-grid');
+      s.results.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'video-card' + (s.selected && s.selected.id === v.id && s.selected.source === v.source ? ' selected' : '');
+        card.innerHTML = `
+          <span class="source-badge source-${v.source}">${v.source}</span>
+          <img src="${v.thumb}" alt="" loading="lazy" onerror="this.style.background='#333'" />
+          <div class="meta">
+            <strong>${escapeHtml(v.title)}</strong>
+            ${v.duration || '?'}s
+          </div>
+        `;
+        card.onclick = () => {
+          s.selected = v;
+          renderShots();
+          updateDownloadBtn();
+        };
+        grid.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function updateDownloadBtn() {
+      const n = shots.filter(s => s.selected).length;
+      $('#btnDownload').disabled = n === 0;
+      $('#clipCount').textContent = n + ' clips';
+    }
+
+    // ---------- ZIP ----------
+    $('#btnDownload').onclick = async () => {
+      const selected = shots.filter(s => s.selected);
+      if (!selected.length) return;
+      $('#btnDownload').disabled = true;
+      $('#btnDownload').textContent = 'Generando…';
+
+      const zip = new JSZip();
+      let attribution = 'Stock Sync Multi – Atribuciones\n=====================================\n\n';
+
+      selected.forEach((s, i) => {
+        const v = s.selected;
+        const num = String(i + 1).padStart(2, '0');
+        const safeName = (s.time || s.query || 'clip').replace(/[^a-z0-9áéíóúñ\- ]/gi, '').slice(0, 40);
+        const fileBase = `${num}_${safeName}`;
+
+        attribution += `Toma ${s.id} – ${s.time || ''}\n`;
+        attribution += `  Fuente: ${v.source}\n`;
+        attribution += `  Descripción: ${s.description || '—'}\n`;
+        attribution += `  Autor/Título: ${v.title}\n`;
+        attribution += `  Página: ${v.pageUrl || '—'}\n`;
+        attribution += `  Enlace directo: ${v.videoUrl || '—'}\n\n`;
+
+        zip.file(`${fileBase}_${v.source}_link.txt`, `Fuente: ${v.source}\nAutor: ${v.title}\nPágina: ${v.pageUrl}\nVideo: ${v.videoUrl}\n`);
+      });
+
+      zip.file('ATRIBUCIONES.txt', attribution);
+      zip.file('README.txt', 'Stock Sync Multi (Pexels + Pixabay + Coverr)\n\nEste ZIP contiene los enlaces y atribuciones de los clips seleccionados.\nDescarga los vídeos desde los enlaces.\nRespeta las licencias de cada plataforma.\n');
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      saveAs(blob, 'stock-sync-multi.zip');
+
+      $('#btnDownload').textContent = 'Bajar ZIP';
+      $('#btnDownload').disabled = false;
+    };
+  </script>
+</body>
+</html>
